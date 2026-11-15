@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>LM vizsgafelkészítő</title>
+<style>
+:root{--bg:#f4f6f5;--card:#fff;--ink:#17231f;--mut:#5d6b66;--line:#dfe5e2;--acc:#0f766e;--accink:#fff;--ok:#15803d;--okbg:#e7f6ec;--no:#b91c1c;--nobg:#fdecec;--warn:#b45309;--sel:#e0f2f1}
+@media (prefers-color-scheme:dark){:root{--bg:#101614;--card:#18211e;--ink:#e7efec;--mut:#9aaaa4;--line:#2a3632;--acc:#2dd4bf;--accink:#06201c;--ok:#4ade80;--okbg:#12301f;--no:#f87171;--nobg:#3a1717;--warn:#fbbf24;--sel:#143531}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+nav{display:flex;flex-wrap:wrap;gap:4px;flex:1}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:.2em 0}h2{font-size:1.25rem;margin:.1em 0 .4em}h3{font-size:1.02rem;margin:0 0 .4em}
+p{margin:.4em 0}
+button,select,input{font:inherit;color:inherit}
+button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+button.danger{border-color:var(--no);color:var(--no)}
+nav button{border:0;background:none;padding:6px 10px}
+nav button.on,.seg button.on{background:var(--sel);color:var(--acc);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:0 0 14px}
+.center{text-align:center}.auth{max-width:420px;margin:8vh auto}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:12px 0}
+.big{font-size:1.9rem;font-weight:700;line-height:1.2}
+.muted{color:var(--mut)}.sm{font-size:.85rem}.good{color:var(--ok)}.bad{color:var(--no)}
+label{display:block;margin:8px 0;font-size:.92rem}
+input[type=email],input[type=password],input[type=number],input:not([type]),select{display:block;width:100%;margin-top:3px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+input[type=range]{width:100%}
+.chk{display:flex;gap:6px;align-items:center;margin:3px 0;font-size:.88rem}
+.secs{display:grid;grid-template-columns:1fr;gap:0;margin:6px 0 10px}
+.seg{display:flex;gap:4px;margin:10px 0}
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--acc)}
+table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:600}td.w{min-width:90px}
+.scroll{overflow-x:auto}
+.tbar{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;padding:10px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.tbar b{flex:1;min-width:160px}.clock{font-variant-numeric:tabular-nums;font-weight:700}.clock.low{color:var(--no)}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.tag{font-size:.78rem;border:1px solid var(--line);border-radius:20px;padding:1px 9px;color:var(--mut)}.tag.warn{color:var(--warn);border-color:var(--warn)}
+.qtext{font-size:1.08rem;font-weight:600;margin-bottom:12px;white-space:pre-wrap}
+.opts{display:grid;gap:8px}
+.opt{display:flex;gap:10px;text-align:left;align-items:flex-start;padding:10px 12px;width:100%}
+.opt .l{flex:0 0 26px;height:26px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:.85rem}
+.opt.sel{background:var(--sel);border-color:var(--acc)}.opt.sel .l{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+.opt:disabled{opacity:1;cursor:default}
+.opt.ok{background:var(--okbg);border-color:var(--ok)}.opt.ok .l{background:var(--ok);color:#fff;border-color:var(--ok)}
+.opt.no{background:var(--nobg);border-color:var(--no)}.opt.no .l{background:var(--no);color:#fff;border-color:var(--no)}
+.ot{display:block}.ex{display:block;margin-top:5px;font-size:.9rem;color:var(--mut)}
+.ref{margin-top:10px;font-size:.88rem;color:var(--mut);border-top:1px dashed var(--line);padding-top:8px}
+.row{display:flex;gap:8px;justify-content:space-between;margin-top:14px;flex-wrap:wrap}
+.navg{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px}
+.navg button{padding:5px 0;font-size:.82rem}.navg .a{background:var(--sel)}.navg .f{border-color:var(--warn);border-width:2px}.navg .cur{outline:2px solid var(--acc)}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+a{color:var(--acc)}
+</style>
+</head>
+<body>
+<div id="app"><div class="card center" style="max-width:420px;margin:8vh auto">Betöltés…</div></div>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// Helyi mód: ha a local/questions.js jelen van (csak a saját gépen), fiók nélkül is használható.
+(function(){var s=document.createElement('script');s.src='local/questions.js';s.onload=s.onerror=function(){var a=document.createElement('script');a.src='app.js';document.body.appendChild(a)};document.body.appendChild(s)})();
+</script>
+</body>
+</html>
