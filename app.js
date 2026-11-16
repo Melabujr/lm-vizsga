@@ -63,9 +63,11 @@ async function loadStore() {
 async function loadQuestions() {
   if (local) { Q = window.QUESTIONS || []; }
   else {
-    const { data, error } = await sb.storage.from('content').download('questions.json');
-    if (error) throw new Error('A kérdésbank nem tölthető le: ' + error.message);
-    Q = JSON.parse(await data.text());
+    // közvetlen letöltés gyorsítótár nélkül, hogy a frissített kérdésbank azonnal megjelenjen
+    const { data: sd } = await sb.auth.getSession();
+    const r = await fetch(CFG.url + '/storage/v1/object/authenticated/content/questions.json?t=' + Date.now(), { headers: { Authorization: 'Bearer ' + (sd.session ? sd.session.access_token : ''), apikey: CFG.key }, cache: 'no-store' });
+    if (!r.ok) throw new Error('A kérdésbank nem tölthető le (' + r.status + '). Ellenőrizd, hogy a questions.json fent van-e a tárolóban.');
+    Q = await r.json();
   }
   QM = Object.fromEntries(Q.map(q => [q.id, q]));
 }
