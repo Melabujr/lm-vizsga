@@ -13,7 +13,7 @@ const pct = (a,b) => b ? Math.round(100*a/b) : 0;
 const fmtT = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return (h? h+':' : '') + String(m).padStart(h?2:1,'0') + ':' + String(x).padStart(2,'0'); };
 const NOSHUF = /\b(all|none) of (the|these)( above)?\b|\bboth [a-e] and [a-e]\b|\b[a-e] and [a-e] are\b|\bare correct\b/i;
 
-let sb = null, user = null, local = false, Q = [], QM = {}, store = null, view = {name:'home'}, timer = null, saveT = null;
+let sb = null, user = null, local = false, Q = [], QM = {}, store = null, view = {name:'home'}, timer = null, saveT = null, remoteOk = false;
 const blank = () => ({stats:{}, attempts:[], current:null, updated:0});
 
 /* ---------- tárolás ---------- */
@@ -24,17 +24,35 @@ function save() {
   try { localStorage.setItem(lsKey(), JSON.stringify(store)); } catch {}
   if (sb && user) { clearTimeout(saveT); saveT = setTimeout(pushRemote, 1500); }
 }
+function merge(a, b) { // két eszköz haladásának összefésülése: kérdésenként a frissebb adat, tesztek uniója
+  const newer = (b.updated || 0) > (a.updated || 0) ? b : a, o = blank(), seen = {};
+  o.stats = Object.assign({}, a.stats);
+  for (const k in (b.stats || {})) { const x = o.stats[k], y = b.stats[k]; if (!x || (y.ts || 0) > (x.ts || 0)) o.stats[k] = y; }
+  o.attempts = [...(a.attempts || []), ...(b.attempts || [])].filter(t => !seen[t.id] && (seen[t.id] = 1)).sort((x, y) => y.id - x.id).slice(0, 80);
+  o.current = newer.current || null; o.updated = Math.max(a.updated || 0, b.updated || 0);
+  return o;
+}
+async function pullRemote() {
+  try {
+    const { data, error } = await sb.from('progress').select('data').eq('user_id', user.id).maybeSingle();
+    if (error) return false;
+    if (data && data.data) store = merge(store, Object.assign(blank(), data.data));
+    return true;
+  } catch { return false; }
+}
 async function pushRemote() {
-  const { error } = await sb.from('progress').upsert({ user_id: user.id, data: store, updated_at: new Date().toISOString() });
+  if (!remoteOk) { // a szerveren lévő haladást még nem láttuk: előbb összefésüljük, nehogy felülírjuk
+    remoteOk = await pullRemote();
+    if (!remoteOk) return setSync('Nincs kapcsolat – a haladás ezen az eszközön megvan');
+    try { localStorage.setItem(lsKey(), JSON.stringify(store)); } catch {}
+  }
+  let error; try { ({ error } = await sb.from('progress').upsert({ user_id: user.id, data: store, updated_at: new Date().toISOString() })); } catch (e) { error = e; }
   setSync(error ? 'Mentési hiba – a haladás ezen az eszközön megvan' : 'Mentve');
 }
 function setSync(t) { const e = $('#sync'); if (e) e.textContent = t; }
 async function loadStore() {
-  store = loadLocal();
-  if (sb && user) {
-    const { data } = await sb.from('progress').select('data').eq('user_id', user.id).maybeSingle();
-    if (data && data.data && (data.data.updated || 0) > (store.updated || 0)) store = Object.assign(blank(), data.data);
-  }
+  store = loadLocal(); remoteOk = false;
+  if (sb && user) remoteOk = await pullRemote();
 }
 async function loadQuestions() {
   if (local) { Q = window.QUESTIONS || []; }
@@ -78,9 +96,17 @@ async function onAuth(f) {
   const d = Object.fromEntries(new FormData(f)), mode = f.dataset.mode;
   const btn = f.querySelector('button'); btn.disabled = true;
   let res;
+  try {
   if (mode === 'reg') res = await sb.auth.signUp({ email: d.email, password: d.pw, options: { data: { invite: (d.invite || '').trim() } } });
   else res = await sb.auth.signInWithPassword({ email: d.email, password: d.pw });
-  if (res.error) return renderAuth(mode === 'reg' ? 'A regisztráció nem sikerült. Ellenőrizd a meghívókódot és az e-mail-címet. (' + res.error.message + ')' : 'Hibás e-mail-cím vagy jelszó.', mode);
+  } catch (e) { res = { error: e, data: {} }; }
+  if (res.error) {
+    const m = res.error.message || '';
+    let t;
+    if (mode === 'reg') t = /database error/i.test(m) ? 'Érvénytelen meghívókód.' : /already registered/i.test(m) ? 'Ezzel az e-mail-címmel már van fiók – a Belépés fülön lépj be.' : 'A regisztráció nem sikerült: ' + m;
+    else t = /invalid login/i.test(m) ? 'Hibás e-mail-cím vagy jelszó.' : 'A belépés nem sikerült: ' + m;
+    return renderAuth(t, mode);
+  }
   if (!res.data.session) return renderAuth('A fiók létrejött. Erősítsd meg az e-mail-címedet a kapott levélben, majd lépj be.', 'login');
   user = res.data.session.user; enter();
 }

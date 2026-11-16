@@ -57,15 +57,16 @@ table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{text-align:left
 .navg button{padding:5px 0;font-size:.82rem}.navg .a{background:var(--sel)}.navg .f{border-color:var(--warn);border-width:2px}.navg .cur{outline:2px solid var(--acc)}
 hr{border:0;border-top:1px solid var(--line);margin:14px 0}
 a{color:var(--acc)}
+@media (max-width:640px){header{padding:8px 12px;gap:4px 12px;justify-content:space-between}nav{flex:0 0 100%;order:3;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}nav::-webkit-scrollbar{display:none}nav button{white-space:nowrap;flex:none}.auth{margin:6vh 16px}main{padding:12px}}
 </style>
 </head>
 <body>
 <div id="app"><div class="card center" style="max-width:420px;margin:8vh auto">Betöltés…</div></div>
-<script src="config.js"></script>
+<script src="config.js?v=2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 // Helyi mód: ha a local/questions.js jelen van (csak a saját gépen), fiók nélkül is használható.
-(function(){var s=document.createElement('script');s.src='local/questions.js';s.onload=s.onerror=function(){var a=document.createElement('script');a.src='app.js';document.body.appendChild(a)};document.body.appendChild(s)})();
+(function(){var s=document.createElement('script');s.src='local/questions.js';s.onload=s.onerror=function(){var a=document.createElement('script');a.src='app.js?v=2';document.body.appendChild(a)};document.body.appendChild(s)})();
 </script>
 </body>
 </html>
