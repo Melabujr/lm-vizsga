@@ -266,9 +266,10 @@ function vResult() {
   ${list.map(r => `<div class="card q"><div class="meta"><b>${r.i+1}.</b><span class="tag">${SRC[r.q.src]}</span><span class="tag">${r.q.sec}. ${SEC[r.q.sec]}</span><span class="tag">${TYPE[r.q.type] || ''}</span>${r.ans ? '' : '<span class="tag warn">nem válaszoltál</span>'}</div>${qHtml(r.q, r.order.length ? r.order : Object.keys(r.q.opts), r.ans, true, r.i)}</div>`).join('')}`;
 }
 function render() {
+  clearInterval(timer); timer = null;
   const v = view.name, body = v === 'home' ? vHome() : v === 'orig' || v === 'gen' ? vBank(v) : v === 'mix' ? vMix() : v === 'progress' ? vProgress() : v === 'wrong' ? vWrong() : v === 'test' ? vTest() : vResult();
   $('#app').innerHTML = (v === 'test' ? '' : nav()) + `<main>${body}</main>`;
-  if (v === 'test' && store.current.limit) { const tick = () => { const t = store.current; if (!t) return; const left = t.limit - (Date.now()-t.start)/1000, c = $('#clock'); if (c) { c.textContent = '⏱ ' + fmtT(left); c.classList.toggle('low', left < 300); } if (left <= 0) { modal('Lejárt az idő – a tesztet lezárom.'); finish(); } }; tick(); timer = setInterval(tick, 1000); }
+  if (v === 'test' && store.current.limit) { const tid = store.current.id, me = {}; const tick = () => { const t = store.current; if (!t || t.id !== tid || !t.limit) { clearInterval(me.h); return; } const left = t.limit - (Date.now()-t.start)/1000, c = $('#clock'); if (c) { c.textContent = '⏱ ' + fmtT(left); c.classList.toggle('low', left < 300); } if (left <= 0) { modal('Lejárt az idő – a tesztet lezárom.'); finish(); } }; tick(); if (store.current && store.current.id === tid) { me.h = timer = setInterval(tick, 1000); } }
 }
 
 /* ---------- események ---------- */
