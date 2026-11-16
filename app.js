@@ -127,7 +127,7 @@ function pick(qs, n, weighted) {
   return shuffle(out);
 }
 function startTest({label, qs, exam, limit}) {
-  if (!qs.length) return alert('Ehhez a beállításhoz nincs elérhető kérdés.');
+  if (!qs.length) return modal('Ehhez a beállításhoz nincs elérhető kérdés.');
   store.current = { id: Date.now(), label, exam, limit, start: Date.now(), cur: 0, ans: {}, flag: {}, shown: {},
     items: qs.map(q => ({ id: q.id, order: q.src === 'orig' && Object.values(q.opts).some(o => NOSHUF.test(o)) ? Object.keys(q.opts) : shuffle(Object.keys(q.opts)) })) };
   save(); go('test');
@@ -139,7 +139,7 @@ function launch(f) {
   let qs = [], n = +d.n || 25, label = '';
   if (kind === 'exam') { n = EXAM_N; qs = pick(pool(d.src), n, true); label = `Vizsgaszimuláció – ${SRC[d.src]}`; }
   else if (kind === 'short') { qs = pick(pool(d.src), n, true); label = `Rövid teszt (${n}) – ${SRC[d.src]}`; }
-  else if (kind === 'section') { if (!secs.length) return alert('Válassz legalább egy szekciót.'); qs = pick(pool(d.src).filter(inSec), n, false); label = `Szekciós teszt (${secs.join(', ')}.) – ${SRC[d.src]}`; }
+  else if (kind === 'section') { if (!secs.length) return modal('Válassz legalább egy szekciót.'); qs = pick(pool(d.src).filter(inSec), n, false); label = `Szekciós teszt (${secs.join(', ')}.) – ${SRC[d.src]}`; }
   else if (kind === 'mix') {
     n = +d.n || 50; let no = d.unit === 'pct' ? Math.round(n*(+d.orig||0)/100) : (+d.orig||0), ng = d.unit === 'pct' ? n-no : (+d.gen||0);
     const a = pick(pool('orig').filter(inSec), no, !secs.length), b = pick(pool('gen').filter(inSec), ng, !secs.length);
@@ -147,6 +147,15 @@ function launch(f) {
   } else if (kind === 'wrong') { qs = shuffle(Q.filter(q => store.stats[q.id] && !store.stats[q.id].last && (!d.src || q.src === d.src))).slice(0, n); label = 'Hibanapló gyakorlás'; }
   const exam = kind === 'exam' ? true : mode === 'exam';
   startTest({ label, qs, exam, limit: kind === 'exam' ? EXAM_SEC : (exam ? qs.length*SEC_PER_Q : 0) });
+}
+/* oldalon belüli párbeszédablak (a böngésző saját confirm/alert ablaka beágyazott nézetben nem mindig jelenik meg) */
+function modal(msg, onOk, okLabel) {
+  document.querySelectorAll('.modal').forEach(x => x.remove());
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><p>${esc(msg)}</p><div class="mrow">${onOk ? '<button data-m="no">Mégse</button>' : ''}<button class="primary" data-m="ok">${esc(okLabel || 'Rendben')}</button></div></div>`;
+  m.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b && e.target !== m) return; e.stopPropagation(); m.remove(); if (b && b.dataset.m === 'ok' && onOk) onOk(); });
+  m.addEventListener('keydown', e => { if (e.key === 'Escape') m.remove(); });
+  document.body.appendChild(m); m.querySelector('[data-m=ok]').focus();
 }
 function finish() {
   const t = store.current; if (!t) return;
@@ -259,7 +268,7 @@ function vResult() {
 function render() {
   const v = view.name, body = v === 'home' ? vHome() : v === 'orig' || v === 'gen' ? vBank(v) : v === 'mix' ? vMix() : v === 'progress' ? vProgress() : v === 'wrong' ? vWrong() : v === 'test' ? vTest() : vResult();
   $('#app').innerHTML = (v === 'test' ? '' : nav()) + `<main>${body}</main>`;
-  if (v === 'test' && store.current.limit) { const tick = () => { const t = store.current; if (!t) return; const left = t.limit - (Date.now()-t.start)/1000, c = $('#clock'); if (c) { c.textContent = '⏱ ' + fmtT(left); c.classList.toggle('low', left < 300); } if (left <= 0) { alert('Lejárt az idő – a tesztet lezárom.'); finish(); } }; tick(); timer = setInterval(tick, 1000); }
+  if (v === 'test' && store.current.limit) { const tick = () => { const t = store.current; if (!t) return; const left = t.limit - (Date.now()-t.start)/1000, c = $('#clock'); if (c) { c.textContent = '⏱ ' + fmtT(left); c.classList.toggle('low', left < 300); } if (left <= 0) { modal('Lejárt az idő – a tesztet lezárom.'); finish(); } }; tick(); timer = setInterval(tick, 1000); }
 }
 
 /* ---------- események ---------- */
@@ -274,7 +283,7 @@ document.addEventListener('click', e => {
   else if (act === 'show') { t.shown[t.cur] = 1; save(); render(); }
   else if (act === 'step') { t.cur += +b.dataset.d; save(); render(); window.scrollTo(0,0); }
   else if (act === 'jump') { t.cur = +b.dataset.k; save(); render(); window.scrollTo(0,0); }
-  else if (act === 'finish') { const left = t.items.length - Object.keys(t.ans).length; if (confirm(left ? `Még ${left} kérdésre nem válaszoltál. Biztosan befejezed?` : 'Befejezed és kiértékeled a tesztet?')) finish(); }
+  else if (act === 'finish') { const left = t.items.length - Object.keys(t.ans).length; modal(left ? `Még ${left} kérdésre nem válaszoltál. Biztosan befejezed?` : 'Befejezed és kiértékeled a tesztet?', finish, 'Befejezés'); }
   else if (act === 'review') go('result', { att: b.dataset.id });
   else if (act === 'only') { view.only = b.dataset.o; render(); }
 });
