@@ -11,6 +11,7 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 const shuffle = a => { a = a.slice(); for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
 const pct = (a,b) => b ? Math.round(100*a/b) : 0;
 const fmtT = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60; return (h? h+':' : '') + String(m).padStart(h?2:1,'0') + ':' + String(x).padStart(2,'0'); };
+const FBLET = /\b(answer|option|choice)s?\s*(is\s*)?\(?[A-Ea-e]\)?[\s.,):]|correct answer is [A-E]\b|\([a-e]\)/;
 const NOSHUF = /\b(all|none) of (the|these)( above)?\b|\bboth [a-e] and [a-e]\b|\b[a-e] and [a-e] are\b|\bare correct\b/i;
 
 let sb = null, user = null, local = false, Q = [], QM = {}, store = null, view = {name:'home'}, timer = null, saveT = null, remoteOk = false;
@@ -29,7 +30,7 @@ function merge(a, b) { // két eszköz haladásának összefésülése: kérdés
   o.stats = Object.assign({}, a.stats);
   for (const k in (b.stats || {})) { const x = o.stats[k], y = b.stats[k]; if (!x || (y.ts || 0) > (x.ts || 0)) o.stats[k] = y; }
   o.attempts = [...(a.attempts || []), ...(b.attempts || [])].filter(t => !seen[t.id] && (seen[t.id] = 1)).sort((x, y) => y.id - x.id).slice(0, 80);
-  o.current = newer.current || null; o.updated = Math.max(a.updated || 0, b.updated || 0);
+  o.current = newer.current && !o.attempts.some(t => t.id === newer.current.id) && !(a.dropped || []).concat(b.dropped || []).includes(newer.current.id) ? newer.current : null; o.dropped = [...new Set((a.dropped || []).concat(b.dropped || []))].slice(-30); o.updated = Math.max(a.updated || 0, b.updated || 0);
   return o;
 }
 async function pullRemote() {
@@ -40,14 +41,19 @@ async function pullRemote() {
     return true;
   } catch { return false; }
 }
+let pushing = false, pushAgain = false;
 async function pushRemote() {
-  if (!remoteOk) { // a szerveren lévő haladást még nem láttuk: előbb összefésüljük, nehogy felülírjuk
-    remoteOk = await pullRemote();
-    if (!remoteOk) return setSync('Nincs kapcsolat – a haladás ezen az eszközön megvan');
+  if (!sb || !user) return;
+  if (pushing) { pushAgain = true; return; }
+  pushing = true;
+  try {
+    const ok = await pullRemote(); // mindig összefésüljük a szerveren lévővel, nehogy másik eszköz haladását felülírjuk
+    if (!ok) { setSync('Nincs kapcsolat – a haladás ezen az eszközön megvan'); return; }
+    remoteOk = true;
     try { localStorage.setItem(lsKey(), JSON.stringify(store)); } catch {}
-  }
-  let error; try { ({ error } = await sb.from('progress').upsert({ user_id: user.id, data: store, updated_at: new Date().toISOString() })); } catch (e) { error = e; }
-  setSync(error ? 'Mentési hiba – a haladás ezen az eszközön megvan' : 'Mentve');
+    let error; try { ({ error } = await sb.from('progress').upsert({ user_id: user.id, data: store, updated_at: new Date().toISOString() })); } catch (e) { error = e; }
+    setSync(error ? 'Mentési hiba – a haladás ezen az eszközön megvan' : 'Mentve');
+  } finally { pushing = false; if (pushAgain) { pushAgain = false; pushRemote(); } }
 }
 function setSync(t) { const e = $('#sync'); if (e) e.textContent = t; }
 async function loadStore() {
@@ -76,6 +82,7 @@ async function boot() {
 async function enter() {
   $('#app').innerHTML = '<div class="card center">Betöltés…</div>';
   try { await loadQuestions(); await loadStore(); } catch (e) { $('#app').innerHTML = `<div class="card"><p class="bad">${esc(e.message)}</p><button data-act="logout">Vissza</button></div>`; return; }
+  if (store.current && (!store.current.items || store.current.items.some(it => !QM[it.id]))) { store.current = null; save(); }
   go(store.current ? 'test' : 'home');
 }
 function renderAuth(msg, mode = 'login') {
@@ -97,7 +104,7 @@ async function onAuth(f) {
   const btn = f.querySelector('button'); btn.disabled = true;
   let res;
   try {
-  if (mode === 'reg') res = await sb.auth.signUp({ email: d.email, password: d.pw, options: { data: { invite: (d.invite || '').trim() } } });
+  if (mode === 'reg') res = await sb.auth.signUp({ email: d.email, password: d.pw, options: { data: { invite: (d.invite || '').trim().toUpperCase() } } });
   else res = await sb.auth.signInWithPassword({ email: d.email, password: d.pw });
   } catch (e) { res = { error: e, data: {} }; }
   if (res.error) {
@@ -129,7 +136,7 @@ function pick(qs, n, weighted) {
 function startTest({label, qs, exam, limit}) {
   if (!qs.length) return modal('Ehhez a beállításhoz nincs elérhető kérdés.');
   store.current = { id: Date.now(), label, exam, limit, start: Date.now(), cur: 0, ans: {}, flag: {}, shown: {},
-    items: qs.map(q => ({ id: q.id, order: q.src === 'orig' && Object.values(q.opts).some(o => NOSHUF.test(o)) ? Object.keys(q.opts) : shuffle(Object.keys(q.opts)) })) };
+    items: qs.map(q => ({ id: q.id, order: q.src === 'orig' && (FBLET.test(q.fb || '') || Object.values(q.opts).some(o => NOSHUF.test(o))) ? Object.keys(q.opts) : shuffle(Object.keys(q.opts)) })) };
   save(); go('test');
 }
 function launch(f) {
@@ -163,7 +170,7 @@ function finish() {
   const rows = t.items.map((it, i) => [it.id, t.ans[i] || '', QM[it.id] ? QM[it.id].key : '']);
   let ok = 0; const now = Date.now();
   rows.forEach(([id, a, k]) => { const c = a && a === k; if (c) ok++; if (a) { const s = store.stats[id] || (store.stats[id] = {n:0,c:0}); s.n++; if (c) s.c++; s.last = c ? 1 : 0; s.ts = now; } });
-  const att = { id: t.id, label: t.label, exam: t.exam, date: now, secs: Math.round((now-t.start)/1000), n: rows.length, ok, rows, orders: t.items.map(i => i.order.join('')) };
+  const att = { id: t.id, label: t.label, exam: t.exam, date: now, secs: Math.min(Math.round((now-t.start)/1000), t.limit || 86400), n: rows.length, ok, rows, orders: t.items.map(i => i.order.join('')) };
   store.attempts.unshift(att); if (store.attempts.length > 80) store.attempts.length = 80;
   store.current = null; save(); go('result', { att: att.id });
 }
@@ -185,7 +192,7 @@ function secChecks() { return `<div class="secs">${Object.keys(SEC).map(k => `<l
 const modeSel = `<label>Mód<select name="mode"><option value="exam">Vizsga mód – javítás a végén, időre</option><option value="practice">Gyakorló mód – azonnali magyarázat</option></select></label>`;
 
 function vHome() {
-  const o = summary('orig'), g = summary('gen'), ex = store.attempts.filter(a => a.n === EXAM_N && a.exam);
+  const o = summary('orig'), g = summary('gen'), ex = store.attempts.filter(a => a.n === EXAM_N && a.exam && a.rows.filter(r => r[1]).length >= EXAM_N * 0.8);
   const card = (t, s, v) => `<div class="card"><h3>${t}</h3><div class="big">${s.seen} / ${s.total}</div><div class="muted">megválaszolt kérdés · ${s.acc}% helyes válasz</div>${bar(s.seen, s.total)}<button data-act="go" data-v="${v}">Megnyitás</button></div>`;
   return `<div class="grid3">${card('Eredeti kérdések', o, 'orig')}${card('Szimulált kérdések', g, 'gen')}
   <div class="card"><h3>Vizsgaszimulációk</h3><div class="big">${ex.length}</div><div class="muted">${ex.length ? `legjobb: ${Math.max(...ex.map(a => pct(a.ok,a.n)))}% · utolsó: ${pct(ex[0].ok,ex[0].n)}%` : 'még nem volt teljes szimuláció'}</div><button data-act="go" data-v="progress">Részletek</button></div></div>
@@ -247,7 +254,7 @@ function qHtml(q, order, chosen, reveal, idx) {
 function vTest() {
   const t = store.current, i = t.cur, it = t.items[i], q = QM[it.id], n = t.items.length, done = Object.keys(t.ans).length;
   const reveal = !t.exam && !!t.shown[i];
-  return `<div class="tbar"><b>${esc(t.label)}</b><span>${i+1} / ${n}</span><span>${done} megválaszolva</span>${t.limit ? '<span id="clock" class="clock"></span>' : ''}<button data-act="finish" class="danger">Befejezés</button></div>
+  return `<div class="tbar"><b>${esc(t.label)}</b><span>${i+1} / ${n}</span><span>${done} megválaszolva</span>${t.limit ? '<span id="clock" class="clock"></span>' : ''}<button data-act="drop" title="Teszt eldobása mentés nélkül">Megszakítás</button><button data-act="finish" class="danger">Befejezés</button></div>
   <div class="card q"><div class="meta"><span class="tag">${SRC[q.src]}</span><span class="tag">${q.sec}. ${SEC[q.sec]}</span><label class="chk"><input type="checkbox" data-act="flag" ${t.flag[i] ? 'checked' : ''}> Megjelölöm</label></div>
   ${qHtml(q, it.order, t.ans[i], reveal, i)}
   <div class="row"><button data-act="step" data-d="-1" ${i ? '' : 'disabled'}>← Előző</button>${!t.exam && !reveal ? `<button data-act="show" ${t.ans[i] ? '' : 'disabled'} class="primary">Ellenőrzés</button>` : ''}<button data-act="step" data-d="1" ${i < n-1 ? '' : 'disabled'} class="${t.exam || reveal ? 'primary' : ''}">Következő →</button></div></div>
@@ -273,18 +280,20 @@ function render() {
 }
 
 /* ---------- események ---------- */
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && sb && user && store && saveT) { clearTimeout(saveT); saveT = null; pushRemote(); } });
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
   const act = b.dataset.act, t = store && store.current;
   if (act === 'go') go(b.dataset.v);
   else if (act === 'authmode') renderAuth('', b.dataset.m);
   else if (act === 'local') { local = true; user = null; enter(); }
-  else if (act === 'logout') { e.preventDefault(); (sb && user ? sb.auth.signOut() : Promise.resolve()).then(() => { user = null; local = false; renderAuth(); }); }
+  else if (act === 'logout') { e.preventDefault(); clearInterval(timer); clearTimeout(saveT); (sb && user ? pushRemote().catch(() => {}).then(() => sb.auth.signOut({ scope: 'local' })).catch(() => {}) : Promise.resolve()).then(() => { user = null; local = false; store = null; renderAuth(); }); }
   else if (act === 'ans') { const i = +b.dataset.i; if (!t || (!t.exam && t.shown[i])) return; t.ans[i] = t.ans[i] === b.dataset.o && t.exam ? undefined : b.dataset.o; if (t.ans[i] === undefined) delete t.ans[i]; save(); render(); }
   else if (act === 'show') { t.shown[t.cur] = 1; save(); render(); }
   else if (act === 'step') { t.cur += +b.dataset.d; save(); render(); window.scrollTo(0,0); }
   else if (act === 'jump') { t.cur = +b.dataset.k; save(); render(); window.scrollTo(0,0); }
-  else if (act === 'finish') { const left = t.items.length - Object.keys(t.ans).length; modal(left ? `Még ${left} kérdésre nem válaszoltál. Biztosan befejezed?` : 'Befejezed és kiértékeled a tesztet?', finish, 'Befejezés'); }
+  else if (act === 'finish') { const left = t.items.length - Object.keys(t.ans).length; const fl = Object.keys(t.flag || {}).length; modal((left ? `Még ${left} kérdésre nem válaszoltál. ` : 'Minden kérdésre válaszoltál. ') + (fl ? `${fl} kérdést megjelöltél. ` : '') + 'Befejezed és kiértékeled a tesztet?', finish, 'Befejezés'); }
+  else if (act === 'drop') { modal('Megszakítod a tesztet? A válaszaid nem számítanak bele a haladásba, és a teszt nem kerül a korábbi tesztek közé.', () => { clearInterval(timer); (store.dropped || (store.dropped = [])).push(t.id); store.current = null; save(); go('home'); }, 'Megszakítás'); }
   else if (act === 'review') go('result', { att: b.dataset.id });
   else if (act === 'only') { view.only = b.dataset.o; render(); }
 });
